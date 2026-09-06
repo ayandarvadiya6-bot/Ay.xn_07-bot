@@ -62,7 +62,7 @@ if user_input := st.chat_input("Say something to Ay.xn_07..."):
             
             # Start chat session with personality instructions
             chat = client.chats.create(
-                model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     temperature=0.7
