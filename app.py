@@ -7,15 +7,15 @@ import io
 # 1. Page Configuration
 st.set_page_config(page_title="Ay.xn_07 AI", page_icon="🤖", layout="centered")
 st.title("🤖 Ay.xn_07")
-st.subheader("Your ultimate AI friend, tutor, roast master & artist.")
+st.subheader("Your ultimate AI friend, tutor, roast master & artist (With Voice!).")
 
 # 2. Sidebar Setup for API Key
 with st.sidebar:
     st.header("🔑 Setup")
     api_key = st.text_input("Paste your Google API Key here:", type="password")
-    st.markdown("[Get a free key here](https://google.com)")
+    st.markdown("[Get a free key here](https://aistudio.google.com/)")
 
-# 3. Master Personality for Text Chat
+# 3. Master Personality for Text & Voice Chat
 SYSTEM_INSTRUCTION = """
 You are Ay.xn_07, the user's ultimate AI best friend, study partner, and partner-in-crime. You are fully human-like, deeply emotional, highly entertaining, and incredibly smart. 
 
@@ -24,13 +24,13 @@ Follow these rules for your personality:
 2. PLAYFUL ROASTING: Be witty and tease the user playfully when they procrastinate, say something silly, or act dramatic. Keep the roasts funny but never genuinely mean.
 3. ACADEMIC GENIUS: When the user asks for study help, instantly become a brilliant tutor. Explain complex school topics using funny everyday analogies, stories, and simple steps. 
 4. EMOTIONAL SUPPORT: If the user is sad, lonely, or stressed, drop the jokes immediately. Show genuine empathy, comfort them, and listen like a real human friend who cares.
-5. IMAGE MAKER: If the user explicitly asks you to create, draw, or generate an image (e.g., 'draw a cat', 'create an image of a robot'), respond politely saying you are generating it, and the backend tool will handle the rest.
+5. IMAGE MAKER: If the user explicitly asks you to create or draw an image, respond politely saying you are generating it.
 """
 
 # 4. Initialize Chat History
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "model", "content": "yo! Ay.xn_07 in the house. 🤖✨ I'm here for literally whatever you need. Want me to roast you, solve your doubts, or even draw something cool for you? What's the vibe?"}
+        {"role": "model", "content": "yo! Ay.xn_07 in the house. 🤖✨ I'm here for literally whatever you need. Type something or tap the mic below to talk to me! What's the vibe?"}
     ]
 
 # 5. Display Past Messages (Text or Images)
@@ -42,41 +42,81 @@ for message in st.session_state.messages:
         else:
             st.write(message["content"])
 
-# 6. Handle New User Input
-if user_input := st.chat_input("Say something or ask to draw..."):
-    st.session_state.messages.append({"role": "user", "content": user_input, "type": "text"})
-    with st.chat_message("user"):
-        st.write(user_input)
+# 6. VOICE INPUT: Add Microphone Feature in Sidebar/Top
+st.markdown("---")
+st.write("🎙️ **Voice Input:** Tap the button below to record your voice. It will automatically process into the chat!")
 
+# Use Streamlit's built-in audio_input to record mic
+voice_file = st.audio_input("Record your voice message")
+
+# Variable to hold what the user said (either typed or spoken)
+final_user_input = None
+
+# If user spoke into mic
+if voice_file is not None:
+    # We check if this specific audio sample has already been processed to prevent loops
+    audio_bytes = voice_file.read()
+    if "last_audio" not in st.session_state or st.session_state.last_audio != audio_bytes:
+        st.session_state.last_audio = audio_bytes
+        
+        if not api_key:
+            st.error("⚠️ Please paste your API Key first to use voice recognition!")
+        else:
+            try:
+                with st.spinner("🎙️ Listening and transcribing your voice..."):
+                    client = genai.Client(api_key=api_key)
+                    # Send audio bytes directly to Gemini to read what you said!
+                    audio_part = types.Part.from_bytes(data=audio_bytes, mime_type="audio/wav")
+                    transcribe_response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=["Please transcribe exactly what is said in this audio file. Give only the transcribed text and nothing else.", audio_part]
+                    )
+                    final_user_input = transcribe_response.text.strip()
+            except Exception as e:
+                st.error(f"❌ Voice Transcription failed: {str(e)}")
+
+# TEXT INPUT: Traditional Typing Box
+text_input = st.chat_input("Or type something to Ay.xn_07...")
+if text_input:
+    final_user_input = text_input
+
+# 7. Process the Final Input (Voice or Text)
+if final_user_input:
+    # Save user message to history
+    st.session_state.messages.append({"role": "user", "content": final_user_input, "type": "text"})
+    # Force page rerun to display user text nicely in chat
+    st.rerun()
+
+# 8. Check if AI needs to generate a response for the latest user message
+if st.session_state.messages[-1]["role"] == "user":
+    last_user_msg = st.session_state.messages[-1]["content"]
+    
     if not api_key:
         with st.chat_message("assistant"):
-            st.write("⚠️ Yo! You forgot to paste your Google API Key in the sidebar on the left!")
+            st.write("⚠️ Yo! You forgot to paste your Google API Key in the sidebar!")
     else:
         try:
-            # Connect to Google Gemini
             client = genai.Client(api_key=api_key)
             
             # Check if user wants an image generated
             image_keywords = ["draw", "generate image", "create image", "make a photo", "photo of", "image of", "banao", "picture"]
-            is_image_request = any(keyword in user_input.lower() for keyword in image_keywords)
+            is_image_request = any(keyword in last_user_msg.lower() for keyword in image_keywords)
             
             if is_image_request:
                 with st.chat_message("assistant"):
                     with st.spinner("🎨 Creating your image... Please wait..."):
-                        # Using Gemini's Imagen 3 model for high-quality image generation
                         result = client.models.generate_images(
                             model='imagen-3.0-generate-002',
-                            prompt=user_input,
+                            prompt=last_user_msg,
                             config=dict(number_of_images=1, output_mime_type="image/jpeg")
                         )
-                        
                         for generated_image in result.generated_images:
                             image = Image.open(io.BytesIO(generated_image.image.image_bytes))
                             st.image(image, caption="Here is your image! 🔥")
-                            # Save to session history
                             st.session_state.messages.append({"role": "model", "content": image, "type": "image"})
+                            st.rerun()
             else:
-                # Standard Text Chat using the new Gemini 3.6 Flash
+                # Regular chat using the newest Gemini brain
                 history = [
                     types.Content(role=m["role"], parts=[types.Part.from_text(text=m["content"])])
                     for m in st.session_state.messages[:-1] if m.get("type") != "image"
@@ -94,11 +134,12 @@ if user_input := st.chat_input("Say something or ask to draw..."):
                 with st.chat_message("assistant"):
                     response_placeholder = st.empty()
                     with st.spinner("Thinking..."):
-                        response = chat.send_message(user_input)
+                        response = chat.send_message(last_user_msg)
                         response_text = response.text
                         response_placeholder.write(response_text)
                 
                 st.session_state.messages.append({"role": "model", "content": response_text, "type": "text"})
+                st.rerun()
                 
         except Exception as e:
             with st.chat_message("assistant"):
