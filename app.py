@@ -25,15 +25,17 @@ Follow these rules for your personality:
 5. ENTERTAINMENT: Keep conversations lively with games, hypothetical questions, and fun banter.
 """
 
-# 4. Initialize Chat Memory
+# 4. Initialize Chat Memory (Using 'model' instead of 'assistant')
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "yo! Ay.xn_07 in the house. 🤖✨ I'm here for literally whatever you need. Want me to roast your bad habits? Need me to explain math so your brain doesn't melt? Or just need someone to vent to? I got you. What's the vibe right now?"}
+        {"role": "model", "content": "yo! Ay.xn_07 in the house. 🤖✨ I'm here for literally whatever you need. Want me to roast your bad habits? Need me to explain math so your brain doesn't melt? Or just need someone to vent to? I got you. What's the vibe right now?"}
     ]
 
 # 5. Display Past Messages
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
+    # We display it nicely as assistant, but track it correctly behind the scenes
+    display_role = "assistant" if message["role"] == "model" else "user"
+    with st.chat_message(display_role):
         st.write(message["content"])
 
 # 6. Handle New Chat Inputs
@@ -52,7 +54,7 @@ if user_input := st.chat_input("Say something to Ay.xn_07..."):
         try:
             client = genai.Client(api_key=api_key)
             
-            # Convert chat history into Google format
+            # Convert chat history into the exact Google format ('user' and 'model')
             history = [
                 types.Content(role=m["role"], parts=[types.Part.from_text(text=m["content"])])
                 for m in st.session_state.messages[:-1]
@@ -76,8 +78,8 @@ if user_input := st.chat_input("Say something to Ay.xn_07..."):
                     response_text = response.text
                     response_placeholder.write(response_text)
             
-            # Save assistant response to history
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            # Save response to history using the correct 'model' role
+            st.session_state.messages.append({"role": "model", "content": response_text})
             
         except Exception as e:
             with st.chat_message("assistant"):
